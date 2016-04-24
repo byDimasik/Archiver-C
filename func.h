@@ -11,3 +11,4 @@ struct heads                           /* archive entry header format */
 }   ;
 
 int add_files(char **, FILE **, int size);
+uint32_t Crc32(unsigned char *buf, size_t len);
