@@ -37,12 +37,26 @@ uint32_t Crc32(unsigned char *buf, size_t len)
     **f_list - указатель на список файлов для архивации
     argc - длина argv
 */
-int add_files(char **argv, FILE **f_list, int argc) {
+int add_files(char **argv, int argc) {
     int i, size = 0;
     unsigned char *buf;     //массив данных файла
     struct stat *f_stat;    //массив структур stat для файла
     FILE *archive;          //архив
     char *filename;         //имя архива
+    FILE **f_list, *f;
+    
+    f_list = (FILE**)malloc((argc-3)*sizeof(FILE));
+    for (i = 0; i < argc-3; i++)
+        f_list[i] = NULL;
+    for (i = 3; i < argc; i++)
+    {
+        if (!(f = fopen(argv[i], "rb")))
+        {
+            printf("Файл с именем %s не найден!\n", argv[i]);
+            return ERR_NOFILE;
+        }
+        f_list[i-3] = f;
+    }
     
     //----- Создание имени архива
     filename = (char*)malloc((strlen(argv[2])+strlen(".govno"))*sizeof(char)); //длина переданного программе имени + длина расширения
@@ -59,31 +73,72 @@ int add_files(char **argv, FILE **f_list, int argc) {
     {
         if (stat(argv[i+3], &f_stat[i])) //получаем информацию о файле
         {
-            printf("Не удалось получить информацию о файле %d\n", i);
-            exit(555);
+            printf("Не удалось получить информацию о файле %s\n", argv[i+3]);
+            exit(ERR_GETINFO);
         }
-        printf("file = %s\n", argv[i+3]);
-        printf("size = %lld\n", f_stat[i].st_size);
         
         size += f_stat[i].st_size; //считаем размер файла
         
         if (!(buf = (unsigned char*)malloc(f_stat[i].st_size*sizeof(char))))
-        {
-            printf("Рот трахал память кончилась\n");
-            exit(666);
-        }
+            exit(ERR_OUTMEM);
         
-        if (fread(buf, sizeof(char), f_stat[i].st_size, f_list[i]) != f_stat[i].st_size) //если колчество считанных байт не равно размеру
-        {
-            printf("Нихрена не прочиталось что за говно!!");
-            exit(777);
-        }
+        if (fread(buf, sizeof(char), f_stat[i].st_size, f_list[i]) != f_stat[i].st_size) //если колчество считанных байт не равно размеру файла
+            exit(ERR_READ);
         
-        //записываем данные о файле через ||  имя файла,        размер,      контрольная сумма
-        fprintf(archive, "%s||%lld||%x||", argv[i+3], f_stat[i].st_size, Crc32(buf, f_stat[i].st_size));
+        //записываем данные о файле через ||    длина имени файла, имя файла,       размер,      контрольная сумма
+        fprintf(archive, "%lu||%s||%lld||%x||", strlen(argv[i+3]), argv[i+3], f_stat[i].st_size, Crc32(buf, f_stat[i].st_size));
         //записываем сам файл
-        fwrite(buf, sizeof(char), f_stat[i].st_size, archive);
+        if (fwrite(buf, sizeof(char), f_stat[i].st_size, archive) != f_stat[i].st_size)
+            exit(ERR_WRITE);
+        
+        fclose(f_list[i]);
     }
+    
+    free(f_list);
+    free(f_stat);
     
     return 0;
 }
+
+int extract_files(char **argv, int argc)
+{
+    int fsize = 0, crc = 0, len_name = 0;
+    char *buf, *filename;
+    FILE *archive, *f;
+    struct stat f_stat;
+    
+    stat(argv[2], &f_stat);
+    
+    archive = fopen(argv[2], "rb");
+    
+    while (ftell(archive) != f_stat.st_size)
+    {
+        fscanf(archive, "%d%*c%*c", &len_name);
+        filename = (char*)malloc((len_name+1)*sizeof(char));
+        fread(filename, sizeof(char), len_name, archive);
+        filename[len_name] = '\0';
+        fscanf(archive, "%*c%*C%d%*c%*c%x%*c%*c", &fsize, &crc);
+        
+        printf("len_name = %d\nfilename = %s\nfsize = %d\ncrc = %x\n", len_name, filename, fsize, crc);
+        
+        buf = (char*)malloc(fsize*sizeof(char));
+        if (fread(buf, sizeof(char), fsize, archive) != fsize)
+            exit(ERR_WRITE);
+        
+        f = fopen(filename, "wb");
+        fwrite(buf, sizeof(char), fsize, f);
+    }
+    return 0;
+}
+
+
+
+
+
+
+
+
+
+
+
+
