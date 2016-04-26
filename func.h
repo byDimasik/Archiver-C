@@ -3,13 +3,14 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#define ERR_UNKNOWN_OPT 222
-#define ERR_NOFILE 333
-#define ERR_NOARG 444
-#define ERR_GETINFO 555
-#define ERR_OUTMEM 666
-#define ERR_READ 777
-#define ERR_WRITE 778
+#define ERR_UNKNOWN_OPT 222 //неизвестный режим работы
+#define ERR_NOFILE 333      //не найден файл для чтения
+#define ERR_CREATEFILE 334  //не удалось создать файл для записи
+#define ERR_NOARG 444       //не передано необходимое количество аргументов
+#define ERR_GETINFO 555     //не удалось получить информацию о файле
+#define ERR_OUTMEM 666      //нехватка памяти
+#define ERR_READ 777        //ошибка чтения файла
+#define ERR_WRITE 778       //ошибка записи файла
 
 struct heads                           /* archive entry header format */
 {   char *name;                        /* file name */

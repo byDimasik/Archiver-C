@@ -2,9 +2,9 @@
 
 int main(int argc, char *argv[])
 {
-    argc = 3;
-    argv[1] = "x";
-    argv[2] = "jopa.govno";
+//    argc = 4;
+//    argv[1] = "x";
+//    argv[2] = "jopa.govno";
 //    argv[3] = "6843-11.jpg";
 //    argv[4] = "Git.pptx";
 //    argv[5] = "Аттестат.pdf";
