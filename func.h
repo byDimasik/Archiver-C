@@ -22,3 +22,6 @@ struct heads                           /* archive entry header format */
 int add_files(char **, int size);
 int extract_files(char **argv, int argc);
 uint32_t Crc32(unsigned char *buf, size_t len);
+
+int code(FILE *fp, FILE *fp3);
+int decode(FILE *f, FILE *f_end);
