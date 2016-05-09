@@ -39,7 +39,7 @@ uint32_t Crc32(unsigned char *buf, size_t len)
    Возвращает код ошибки в случае ошибки и 0 при успешном выполнении
 */
 int add_files(char **argv, int argc) {
-    int i, size = 0;
+    int i;
     unsigned char *buf;     //массив данных файла
     struct stat *f_stat;    //массив структур stat для файла
     FILE *archive;          //архив
@@ -81,8 +81,6 @@ int add_files(char **argv, int argc) {
         if (stat(argv[i+3], &f_stat[i])) //получаем информацию о файле
             exit(ERR_GETINFO);
         
-        size += f_stat[i].st_size; //считаем размер файла
-        
         if (!(buf = (unsigned char*)malloc(f_stat[i].st_size*sizeof(char))))
             exit(ERR_OUTMEM);
         
@@ -90,21 +88,19 @@ int add_files(char **argv, int argc) {
             exit(ERR_READ);
         
         //записываем данные о файле через ||    длина имени файла, имя файла,       размер,      контрольная сумма
-//        fprintf(archive, "%lu||%s||%lld||%x||", strlen(argv[i+3]), argv[i+3], f_stat[i].st_size, Crc32(buf, f_stat[i].st_size));
+
+        //----- Записываем заголовок
         len_name = strlen(argv[i+3]);
         crc = Crc32(buf, f_stat[i].st_size);
         fwrite(&len_name, sizeof(unsigned long), 1, archive);
         fwrite(argv[i+3], sizeof(char), len_name, archive);
         fwrite(&f_stat[i].st_size, sizeof(long long), 1, archive);
         fwrite(&crc, sizeof(uint32_t), 1, archive);
+        //------
         
         fseek(f_list[i], 0, SEEK_SET);
         
         code(f_list[i], archive);
-        
-        //записываем сам файл
-//        if (fwrite(buf, sizeof(char), f_stat[i].st_size, archive) != f_stat[i].st_size)
-//            exit(ERR_WRITE);
         
         fclose(f_list[i]); //закрываем записанный файл
         free(buf);         //освбождаем буфер
@@ -129,17 +125,14 @@ int extract_files(char **argv, int argc)
 {
     int i;
     long long fsize = 0;          //размер файла
-//    int crc = 0;            //контрольная сумма
-//    int len_name = 0;       //длина имени
-    int this_f = 0;         //флаг для извлечения отдельного файла
-    unsigned long len_name = 0;
-    uint32_t crc = 0;
+    int this_f = 0;               //флаг для извлечения отдельного файла
+    unsigned long len_name = 0;   //длина имени
+    uint32_t crc = 0;             //контрольная сумма
     
-//    char *buf;              //буфер для считывания файла
     char *filename;         //имя файла
     
     FILE *archive;          //переданный архив
-    FILE *f = NULL;                //обрабатываемый файл
+    FILE *f = NULL;         //обрабатываемый файл
     struct stat arc_stat;   //структура с информацией об архиве
     
     stat(argv[2], &arc_stat);
@@ -167,21 +160,13 @@ int extract_files(char **argv, int argc)
         
         if (this_f || (argc == 3)) //если найден файл для извлечения, либо если файлов не передано вообще
         {
-//            if (!(buf = (char*)malloc(fsize*sizeof(char))))
-//                exit(ERR_OUTMEM);
-//            if (fread(buf, sizeof(char), fsize, archive) != fsize) //считываем файл из архива
-//                exit(ERR_WRITE);
-        
             if (!(f = fopen(filename, "wb"))) //создаем пустой файл с именем извлекаемого
                 exit(ERR_CREATEFILE);
             
             printf("Start decoding %s...\n", filename);
             decode(archive, f);
-//            if (fwrite(buf, sizeof(char), fsize, f) != fsize) //записываем извлеченный файл отдельно
-//                exit(ERR_WRITE);
             
             fclose(f); //закрываем созданный файл
-//            free(buf); //освобождаем буфер
             
             this_f = 0;
         }

@@ -2,18 +2,18 @@
 #include <stdlib.h>
 #include <string.h>
 
-struct sym //структуры или записи
+struct sym //символ в дереве Хаффмана
 {
-    unsigned char ch;
-    float freq;
-    char code[255];
-    struct sym *left;
-    struct sym *right;
+    unsigned char ch;       //символ
+    float freq;             //частота встречаемости
+    char code[255];         //код символа
+    struct sym *left;       //указатель на левый узел
+    struct sym *right;      //указатель на правый узел
 }; typedef struct sym sym;
 
 union code
 {
-    unsigned char chhh;//переменная содержащая код для записи в сжатый файл
+    unsigned char chhh; //переменная содержащая код для записи в сжатый файл
     
     struct byte
     {
@@ -25,7 +25,7 @@ union code
         unsigned b6:1;
         unsigned b7:1;
         unsigned b8:1;
-    }byte;
+    } byte;
 };
 
 sym *makeTree(sym *psym[], int k)//рeкурсивная функция создания дерева Хаффмана
@@ -147,16 +147,14 @@ int code(FILE *fp, FILE *fp3)
     }
     fclose(fp2);
     
-    //Заново открываем файл с бинарным кодом, но теперь для чтения
-    fp2 = fopen("teemp.txt", "rb");
-    //Считаем размер бинарного файла(количество символов в нём)
-    while ((chh = fgetc(fp2)) != EOF)
+    fp2 = fopen("teemp.txt", "rb"); //Заново открываем файл с бинарным кодом, но теперь для чтения
+    
+    while ((chh = fgetc(fp2)) != EOF) //Считаем размер временного файла
         fsize2++;
     
-    ts = fsize2 % 8;//находим остаток, количество символов не кратных 8 (хвост)
+    ts = fsize2 % 8;  //находим остаток, количество символов не кратных 8 (хвост)
     
     //формируем заголовок сжатого файла через поля байтов
-    
     fwrite(&k, sizeof(int), 1, fp3);                 //количество уникальных символов
     fwrite(&ts, sizeof(int), 1, fp3);                //величина хвоста
     
@@ -167,7 +165,7 @@ int code(FILE *fp, FILE *fp3)
         fwrite(&simbols[i].freq, sizeof(float), 1, fp3);
     }
     
-    rewind(fp2);//возвращаем указатель в промежуточном файле в начало файла
+    rewind(fp2);  //возвращаем указатель в промежуточном файле в начало файла
     
     union code code1; //инициализируем переменную code1
     
@@ -187,7 +185,6 @@ int code(FILE *fp, FILE *fp3)
             code1.byte.b7 = mes[6]-'0';
             code1.byte.b8 = mes[7]-'0';
             
-//            fwrite(&code1.chhh, sizeof(unsigned char), 1, fp3);
             count++;
             buf_end = (unsigned char*)realloc(buf_end, count*sizeof(unsigned char));
             buf_end[count-1] = code1.chhh;
@@ -217,7 +214,6 @@ int code(FILE *fp, FILE *fp3)
             code1.byte.b7 = mes[6]-'0';
             code1.byte.b8 = mes[7]-'0';
             
-//            fwrite(&code1.chhh, sizeof(unsigned char), 1, fp3);
             count++;
             buf_end = (unsigned char*)realloc(buf_end, count*sizeof(unsigned char));
             buf_end[count-1] = code1.chhh;
@@ -231,8 +227,8 @@ int code(FILE *fp, FILE *fp3)
     remove("teemp.txt");
     
     fwrite(&count, sizeof(int), 1, fp3);
-    printf("count = %d\n", count);
     fwrite(buf_end, sizeof(unsigned char), count, fp3);
+    free(buf_end);
     
     return count;
 }
@@ -260,14 +256,14 @@ int decode(FILE *f, FILE *f_end) {
         fread(&simbols[i].ch, sizeof(unsigned char), 1, f);
         fread(&simbols[i].freq, sizeof(float), 1, f);
     }
-    fread(&count, sizeof(int), 1, f);
+    fread(&count, sizeof(int), 1, f);  //размер сжатого файла
     
     for (i = 0; i <= k; i++) //в массив указателей заносим адреса записей
         psym[i] = &simbols[i];
     
     sym *root = makeTree(psym, k+1); //создание дерева Хаффмана
     
-    makeCodes(root);   //получение кода для символов
+    makeCodes(root);   //получение кодов для символов
     
     f_temp = fopen("teemp.txt", "wb");
     
@@ -322,6 +318,7 @@ int decode(FILE *f, FILE *f_end) {
                 end = (char)simbols[i].ch;
                 fwrite(&end, sizeof(char), 1, f_end);
                 memset(buf_code, 0, strlen(buf_code));
+                break;
             }
     }
     //----
