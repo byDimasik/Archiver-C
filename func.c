@@ -198,6 +198,50 @@ int extract_files(char **argv, int argc)
     return 0;
 }
 
+int show_flist(char **argv, int argc) {
+    FILE *arc;
+    
+    int k, count;
+    long long fsize = 0;          //размер файла
+    unsigned long len_name = 0;   //длина имени
+    uint32_t crc = 0;             //контрольная сумма
+    
+    char *filename;         //имя файла
+    
+    struct stat arc_stat;   //структура с информацией об архиве
+    
+    stat(argv[2], &arc_stat);
+    
+    if (argc != 3)
+        exit(ERR_NOARG);
+    arc = fopen(argv[2], "rb");
+    
+    while (ftell(arc) != arc_stat.st_size)
+    {
+        //-------- Считывание заголовка файла
+        fread(&len_name, sizeof(unsigned long), 1, arc);
+        if (!(filename = (char*)malloc((len_name+1)*sizeof(char))))
+            exit(ERR_OUTMEM);
+        if (fread(filename, sizeof(char), len_name, arc) != len_name)
+            exit(ERR_READ);
+        filename[len_name] = '\0';
+        fread(&fsize, sizeof(long long), 1, arc);
+        fread(&crc, sizeof(uint32_t), 1, arc);
+        //--------
+        
+        printf("File: %s\nSize = %lld bytes\t\tCrc = %x\n\n", filename, fsize, crc);
+
+        fread(&k, sizeof(int), 1, arc);                 //количество уникальных символов
+        fseek(arc, sizeof(int)+(k+1)*sizeof(unsigned char)+(k+1)*sizeof(float), SEEK_CUR);
+        fread(&count, sizeof(int), 1, arc);
+        
+        if (fseek(arc, count, SEEK_CUR))
+            exit(ERR_READ);
+    
+    }
+    return 0;
+}
+
 
 
 

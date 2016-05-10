@@ -16,7 +16,7 @@ int main(int argc, char *argv[])
     }
     
     if (!strcmp(argv[1], "l"))
-        printf("Информация о файлах\n");
+        show_flist(argv, argc);
     
     else if (!strcmp(argv[1], "t"))
         printf("Проверка целостности архива\n");
@@ -25,10 +25,7 @@ int main(int argc, char *argv[])
         add_files(argv, argc);
 
     else if (!strcmp(argv[1], "x"))
-    {
         extract_files(argv, argc);
-        printf("Извлечение файлов\n");
-    }
 
     else if (!strcmp(argv[1], "d"))
         printf("Удаление файла из архива\n");
