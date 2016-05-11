@@ -3,11 +3,11 @@
 int main(int argc, char *argv[])
 {
 //    argc = 4;
-//    argv[1] = "x";
-//    argv[2] = "jopa.govno";
-//    argv[3] = "6843-11.jpg";
-//    argv[4] = "Git.pptx";
-//    argv[5] = "Аттестат.pdf";
+//    argv[1] = "a";
+//    argv[2] = "test";
+//    argv[3] = "10M_zero_bytes";
+//    argv[3] = "Git.pptx";
+//    argv[3] = "Аттестат.pdf";
     
     if (argc < 2)
     {

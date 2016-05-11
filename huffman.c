@@ -36,6 +36,7 @@ sym *makeTree(sym *psym[], int k)//рeкурсивная функция созд
     temp->code[0] = 0;
     temp->left = psym[k-1];
     temp->right = psym[k-2];
+
     
     if (k == 2)
         return temp;
@@ -97,6 +98,8 @@ int code(FILE *fp, FILE *fp3)
         {
             if ((unsigned char)chh == simbols[i].ch)
             {
+                if (((unsigned char)chh == 0) && (k == 0))
+                    k++;
                 kolvo[i]++;
                 kk++;
                 break;
@@ -129,7 +132,7 @@ int code(FILE *fp, FILE *fp3)
                 simbols[j] = simbols[j+1];
                 simbols[j+1] = tempp;
             }
-    
+ 
     sym *root = makeTree(psym, k+1); //создание дерева Хаффмана
     
     makeCodes(root); //вызов функции получения кода
@@ -233,7 +236,7 @@ int code(FILE *fp, FILE *fp3)
     return count;
 }
 
-int decode(FILE *f, FILE *f_end) {
+int decode(FILE *f, FILE *f_end, long long fsize) {
     FILE *f_temp;                     //временный файл
     char buf_code[256], chh, end, mes[8];
     int i, j, ch, ts, k, count = 0;
@@ -305,10 +308,12 @@ int decode(FILE *f, FILE *f_end) {
     for (i = 0; i < 256; i++)
         buf_code[i] = 0;
     
+    count = 0;
     f_temp = fopen("teemp.txt", "rb");
     //---- считываем из временного файла битовые последовательности и преобразуем в исходные символы
-    while ((ch = fgetc(f_temp)) != EOF)
+    while (count != fsize)
     {
+        ch = fgetc(f_temp);
         chh = ch;
         strncat(buf_code, &chh, 1);
  
@@ -317,6 +322,7 @@ int decode(FILE *f, FILE *f_end) {
             {
                 end = (char)simbols[i].ch;
                 fwrite(&end, sizeof(char), 1, f_end);
+                count++;
                 memset(buf_code, 0, strlen(buf_code));
                 break;
             }

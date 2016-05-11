@@ -26,4 +26,4 @@ uint32_t Crc32(unsigned char *buf, size_t len);
 
 
 int code(FILE *fp, FILE *fp3);
-int decode(FILE *f, FILE *f_end);
+int decode(FILE *f, FILE *f_end, long long fsize);

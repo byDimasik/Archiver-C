@@ -39,15 +39,16 @@ uint32_t Crc32(unsigned char *buf, size_t len)
    Возвращает код ошибки в случае ошибки и 0 при успешном выполнении
 */
 int add_files(char **argv, int argc) {
-    int i;
-    unsigned char *buf;     //массив данных файла
-    struct stat *f_stat;    //массив структур stat для файла
-    FILE *archive;          //архив
-    char *arcname;          //имя архива
+    int i, update = 0, this_f = 0;
+    unsigned char *buf;               //массив данных файла
+    struct stat *f_stat, arc_stat;    //массив структур stat для файла и струтура для архива
+    FILE *archive = NULL, *old_arc;   //архив
     FILE **f_list, *f;
     unsigned long len_name;
     uint32_t crc;
-    
+    char *name_old_arc = NULL, *filename;
+    long long fsize;
+
     //FIXME добавить проверку для файлов, защищенных от записей
     f_list = (FILE**)malloc((argc-3)*sizeof(FILE));
     for (i = 0; i < argc-3; i++)
@@ -62,24 +63,38 @@ int add_files(char **argv, int argc) {
         f_list[i-3] = f;
     }
     
-    //----- Создание имени архива
-    if (!(arcname = (char*)malloc((sizeof(argv[2])+strlen(".govno"))*sizeof(char)))) //длина переданного программе имени + длина расширения
-        exit(ERR_OUTMEM);
-    strncat(arcname, argv[2], strlen(argv[2]));    //добавляем переданное имя
-    strncat(arcname, ".govno", 6);                 //добавляем расширение
-    //-----
-    
-    if (!(archive = fopen(arcname, "wb")))
-        exit(ERR_CREATEFILE);
-    
     if (!(f_stat = (struct stat*)malloc((argc-3)*sizeof(struct stat)))) //тут и далее argc-3 количество файлов
         exit(ERR_OUTMEM);
     
-    //цикл генерации архива
+    if (stat(argv[2], &arc_stat) != -1) //если архив с переданным именем уже существует
+    {
+        update = 1;
+        name_old_arc = (char*)malloc((strlen(argv[2])+strlen(".old"))*sizeof(char));
+        strcpy(name_old_arc, argv[2]);
+        strcat(name_old_arc, ".old");
+        if (rename(argv[2], name_old_arc)) //переименовывем старый
+        {
+            printf("Не удалось переименовать архив!\n");
+            exit(ERR_WRITE);
+        }
+    }
+    
+    //Создаем архив из переданных файлов
     for (i = 0; i < argc-3; i++)
     {
         if (stat(argv[i+3], &f_stat[i])) //получаем информацию о файле
             exit(ERR_GETINFO);
+        
+        if (!f_stat[i].st_size)
+        {
+            printf("Файл %s пустой и не будет добавлен в архив!\n", argv[i+3]);
+            fclose(f_list[i]);
+            continue;
+        }
+        
+        if (!i)
+            if (!(archive = fopen(argv[2], "wb")))
+                exit(ERR_CREATEFILE);
         
         if (!(buf = (unsigned char*)malloc(f_stat[i].st_size*sizeof(char))))
             exit(ERR_OUTMEM);
@@ -87,8 +102,6 @@ int add_files(char **argv, int argc) {
         if (fread(buf, sizeof(char), f_stat[i].st_size, f_list[i]) != f_stat[i].st_size) //если колчество считанных байт не равно размеру файла
             exit(ERR_READ);
         
-        //записываем данные о файле через ||    длина имени файла, имя файла,       размер,      контрольная сумма
-
         //----- Записываем заголовок
         len_name = strlen(argv[i+3]);
         crc = Crc32(buf, f_stat[i].st_size);
@@ -99,16 +112,99 @@ int add_files(char **argv, int argc) {
         //------
         
         fseek(f_list[i], 0, SEEK_SET);
-        
+
         code(f_list[i], archive);
         
         fclose(f_list[i]); //закрываем записанный файл
         free(buf);         //освбождаем буфер
     }
+    free(filename);
+    
+    if (update) //Если есть старый архив, копируем из него файлы, которые не были переданы
+    {
+        old_arc = fopen(name_old_arc, "rb");
+        
+        while (ftell(old_arc) != arc_stat.st_size)
+        {
+            int k, ts, count;
+            unsigned char *ch;
+            float *freq;
+            
+            //-------- Считывание заголовка файла
+            fread(&len_name, sizeof(unsigned long), 1, old_arc);
+            if (!(filename = (char*)malloc((len_name+1)*sizeof(char))))
+                exit(ERR_OUTMEM);
+            if (fread(filename, sizeof(char), len_name, old_arc) != len_name)
+                exit(ERR_READ);
+            filename[len_name] = '\0';
+            fread(&fsize, sizeof(long long), 1, old_arc);
+            fread(&crc, sizeof(uint32_t), 1, old_arc);
+            //--------
+        
+            for (i = 3; i < argc; i++)
+                if (!strcmp(argv[i], filename))
+                    this_f = 1; //Если найден файл, который был обновлен, устанавливаем флаг
+
+            
+            fread(&k, sizeof(int), 1, old_arc);                 //количество уникальных символов
+            fread(&ts, sizeof(int), 1, old_arc);                //величина хвоста
+            
+            ch = (unsigned char*)malloc((k+1)*sizeof(unsigned char));
+            freq = (float*)malloc((k+1)*sizeof(float));
+            
+            for (i = 0; i <= k; i++) //считываем таблицу встречаемости
+            {
+                fread(&ch[i], sizeof(unsigned char), 1, old_arc);
+                fread(&freq[i], sizeof(float), 1, old_arc);
+            }
+            fread(&count, sizeof(int), 1, old_arc);
+            
+            if (this_f) //пропускаем файл, который есть уже обновленный в новом архиве
+            {
+                if (fseek(old_arc, count, SEEK_CUR))
+                    exit(ERR_READ);
+                
+                free(filename);
+                free(ch);
+                free(freq);
+
+                continue;
+            }
+    
+            buf = (unsigned char*)malloc(count*sizeof(unsigned char));
+            
+            fread(buf, sizeof(unsigned char), count, old_arc);
+            
+            //----- Записываем заголовок
+            fwrite(&len_name, sizeof(unsigned long), 1, archive);
+            fwrite(filename, sizeof(char), len_name, archive);
+            fwrite(&fsize, sizeof(long long), 1, archive);
+            fwrite(&crc, sizeof(uint32_t), 1, archive);
+            //------
+            
+            fwrite(&k, sizeof(int), 1, archive);                 //количество уникальных символов
+            fwrite(&ts, sizeof(int), 1, archive);                //величина хвоста
+            
+            //Записываем в сжатый файл таблицу встречаемости
+            fwrite(ch, sizeof(unsigned char), k+1, archive);
+            fwrite(freq, sizeof(float), k+1, archive);
+            
+            fwrite(&count, sizeof(int), 1, archive);
+            
+            fwrite(buf, sizeof(unsigned char), count, archive);
+            
+            free(filename);
+            free(buf);
+            free(ch);
+            free(freq);
+        }
+        fclose(old_arc);
+        remove(name_old_arc);
+        free(name_old_arc);
+    }
     
     fclose(archive); //закрываем архив
-    
-    free(arcname);   //освобождаем имя архива
+
     free(f_list);    //освобождаем массив файлов
     free(f_stat);    //освобождаем массив структур
     
@@ -164,7 +260,7 @@ int extract_files(char **argv, int argc)
                 exit(ERR_CREATEFILE);
             
             printf("Start decoding %s...\n", filename);
-            decode(archive, f);
+            decode(archive, f, fsize);
             
             fclose(f); //закрываем созданный файл
             
@@ -198,6 +294,11 @@ int extract_files(char **argv, int argc)
     return 0;
 }
 
+
+/* Отображение файлов в архиве
+   Принимает: переданные программе параметры
+   Возвращает: код ошибки, либо 0 при успешном завершении
+*/
 int show_flist(char **argv, int argc) {
     FILE *arc;
     
