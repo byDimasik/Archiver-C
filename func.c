@@ -164,6 +164,7 @@ int add_files(char **argv, int argc) {
                 if (fseek(old_arc, count, SEEK_CUR))
                     exit(ERR_READ);
                 
+                this_f = 0;
                 free(filename);
                 free(ch);
                 free(freq);
@@ -340,6 +341,127 @@ int show_flist(char **argv, int argc) {
             exit(ERR_READ);
     
     }
+    return 0;
+}
+
+/* Удаление файла(ов) из архива
+   Принимает: переданные программе параметры
+   Возвращает: код ошибки, либо 0 при успешном завершении
+*/
+int delete_files(char **argv, int argc)
+{
+    FILE *f_old, *f_new;
+    char *filename = NULL, *name_old_arc = NULL;
+    unsigned long len_name;
+    long long fsize;
+    uint32_t crc;
+    struct stat old_stat;
+    int i, this_f = 0;
+    int k, ts, count;
+    unsigned char *ch, *buf;
+    float *freq;
+    
+    if (argc < 4)
+    {
+        printf("Не переданы аргументы!\n");
+        exit(ERR_NOARG);
+    }
+    
+    name_old_arc = (char*)malloc((strlen(argv[2])+strlen(".old"))*sizeof(char));
+    strcpy(name_old_arc, argv[2]);
+    strcat(name_old_arc, ".old");
+    if (rename(argv[2], name_old_arc)) //переименовывем старый
+    {
+        printf("Не удалось переименовать архив!\n");
+        exit(ERR_WRITE);
+    }
+    
+    stat(name_old_arc, &old_stat);
+    f_old = fopen(name_old_arc, "rb");
+    f_new = fopen(argv[2], "wb");
+    
+    while (ftell(f_old) != old_stat.st_size)
+    {
+        //-------- Считывание заголовка файла
+        fread(&len_name, sizeof(unsigned long), 1, f_old);
+        if (!(filename = (char*)malloc((len_name+1)*sizeof(char))))
+            exit(ERR_OUTMEM);
+        if (fread(filename, sizeof(char), len_name, f_old) != len_name)
+            exit(ERR_READ);
+        filename[len_name] = '\0';
+        fread(&fsize, sizeof(long long), 1, f_old);
+        fread(&crc, sizeof(uint32_t), 1, f_old);
+        //--------
+        
+        for (i = 3; i < argc; i++)
+            if (!strcmp(argv[i], filename))
+                this_f = 1; //Если найден файл, который нужно удалить, устанавливаем флаг
+        
+        
+        fread(&k, sizeof(int), 1, f_old);                 //количество уникальных символов
+        fread(&ts, sizeof(int), 1, f_old);                //величина хвоста
+        
+        ch = (unsigned char*)malloc((k+1)*sizeof(unsigned char));
+        freq = (float*)malloc((k+1)*sizeof(float));
+        
+        for (i = 0; i <= k; i++) //считываем таблицу встречаемости
+        {
+            fread(&ch[i], sizeof(unsigned char), 1, f_old);
+            fread(&freq[i], sizeof(float), 1, f_old);
+        }
+        fread(&count, sizeof(int), 1, f_old);
+        
+        if (this_f) //пропускаем файл, который нужно удалить
+        {
+            if (fseek(f_old, count, SEEK_CUR))
+                exit(ERR_READ);
+            
+            this_f = 0;
+            free(filename);
+            free(ch);
+            free(freq);
+            
+            continue;
+        }
+
+        buf = (unsigned char*)malloc(count*sizeof(unsigned char));
+        
+        fread(buf, sizeof(unsigned char), count, f_old);
+        
+        //----- Записываем заголовок
+        fwrite(&len_name, sizeof(unsigned long), 1, f_new);
+        fwrite(filename, sizeof(char), len_name, f_new);
+        fwrite(&fsize, sizeof(long long), 1, f_new);
+        fwrite(&crc, sizeof(uint32_t), 1, f_new);
+        //------
+        
+        fwrite(&k, sizeof(int), 1, f_new);                 //количество уникальных символов
+        fwrite(&ts, sizeof(int), 1, f_new);                //величина хвоста
+        
+        //Записываем в сжатый файл таблицу встречаемости
+        fwrite(ch, sizeof(unsigned char), k+1, f_new);
+        fwrite(freq, sizeof(float), k+1, f_new);
+        
+        fwrite(&count, sizeof(int), 1, f_new);
+        
+        fwrite(buf, sizeof(unsigned char), count, f_new);
+        
+        free(filename);
+        free(buf);
+        free(ch);
+        free(freq);
+    }
+    fclose(f_old);
+    remove(name_old_arc);
+    free(name_old_arc);
+    
+    fclose(f_new);
+    
+    stat(argv[2], &old_stat);
+    
+    if (!old_stat.st_size) //Если после удаления архив пустой, то удаляем архив
+        remove(argv[2]);
+    
     return 0;
 }
 

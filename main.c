@@ -28,7 +28,7 @@ int main(int argc, char *argv[])
         extract_files(argv, argc);
 
     else if (!strcmp(argv[1], "d"))
-        printf("Удаление файла из архива\n");
+        delete_files(argv, argc);
 
     else
     {
