@@ -225,6 +225,7 @@ int extract_files(char **argv, int argc)
     int this_f = 0;               //флаг для извлечения отдельного файла
     unsigned long len_name = 0;   //длина имени
     uint32_t crc = 0;             //контрольная сумма
+    unsigned char *buf;
     
     char *filename;         //имя файла
     
@@ -264,6 +265,19 @@ int extract_files(char **argv, int argc)
             decode(archive, f, fsize);
             
             fclose(f); //закрываем созданный файл
+            
+            f = fopen(filename, "rb"); //открываем разархивированный файл на чтение для проверки на целостность
+            
+            buf = (unsigned char*)malloc(fsize*sizeof(unsigned char));
+            fread(buf, sizeof(unsigned char), fsize, f);
+            
+            if (crc != Crc32(buf, fsize))
+            {
+                printf("Файл %s поврежден и не будет извлечен. Воспользуйтесь командой 't', чтобы проверить целостность архива. Командой 'd %s', чтобы удалить поврежденный файл из архива.\n", filename, filename);
+                
+                fclose(f);
+                remove(filename);
+            }
             
             this_f = 0;
         }
@@ -461,6 +475,73 @@ int delete_files(char **argv, int argc)
     
     if (!old_stat.st_size) //Если после удаления архив пустой, то удаляем архив
         remove(argv[2]);
+    
+    return 0;
+}
+
+/* Проверка архива на целостность
+   Принимает: переданные программе параметры
+   Возвращает: код ошибки, либо 0 при успешном завершении
+*/
+int check_integrity(char **argv, int argc)
+{
+    FILE *arc, *temp;
+    struct stat arc_stat;
+    unsigned long len_name;
+    char *filename, *filename_tmp;
+    long long fsize;
+    uint32_t crc;
+    unsigned char *buf;
+    int dmg = 0;
+    
+    stat(argv[2], &arc_stat);
+    arc = fopen(argv[2], "rb");
+    
+    while (ftell(arc) != arc_stat.st_size)
+    {
+        //-------- Считывание заголовка файла
+        fread(&len_name, sizeof(unsigned long), 1, arc);
+        if (!(filename = (char*)malloc((len_name+1)*sizeof(char))))
+            exit(ERR_OUTMEM);
+        if (fread(filename, sizeof(char), len_name, arc) != len_name)
+            exit(ERR_READ);
+        filename[len_name] = '\0';
+        fread(&fsize, sizeof(long long), 1, arc);
+        fread(&crc, sizeof(uint32_t), 1, arc);
+        //--------
+        
+        filename_tmp = (char*)malloc(sizeof(filename) + strlen(".tmp")*sizeof(char));
+        strcpy(filename_tmp, filename);
+        strcat(filename_tmp, ".tmp");
+        
+        temp = fopen(filename_tmp, "wb"); //открываем временный файл
+        
+        decode(arc, temp, fsize); //декодируем файл из архива во временный файл
+        
+        fclose(temp);
+        temp = fopen(filename_tmp, "rb");
+        
+        buf = (unsigned char*)malloc(fsize*sizeof(unsigned char));
+        
+        fread(buf, sizeof(unsigned char), fsize, temp); //считываем то, что декодировали
+        
+        if (crc != Crc32(buf, fsize)) //если crc исходного файла и декодированного не совпали, говорим, что файл поврежден
+        {
+            dmg = 1;
+            printf("Файл %s поврежден!\n", filename);
+        }
+        
+        fclose(temp);
+        remove(filename_tmp);
+        free(filename_tmp);
+        free(filename);
+        free(buf);
+    }
+    
+    fclose(arc);
+    
+    if (!dmg)
+        printf("Архив НЕ поврежден!\n");
     
     return 0;
 }

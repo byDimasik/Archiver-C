@@ -11,6 +11,7 @@
 #define ERR_OUTMEM 666      //нехватка памяти
 #define ERR_READ 777        //ошибка чтения файла
 #define ERR_WRITE 778       //ошибка записи файла
+#define DAMAGED_FILE 888    //несовпадение контрольной суммы при проверки архива на целостность
 
 struct heads                           /* archive entry header format */
 {   char *name;                        /* file name */
@@ -23,6 +24,7 @@ int add_files(char **, int size);
 int extract_files(char **argv, int argc);
 int show_flist(char **argv, int argc);
 int delete_files(char **argv, int argc);
+int check_integrity(char **argv, int argc);
 uint32_t Crc32(unsigned char *buf, size_t len);
 
 

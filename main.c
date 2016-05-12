@@ -19,7 +19,7 @@ int main(int argc, char *argv[])
         show_flist(argv, argc);
     
     else if (!strcmp(argv[1], "t"))
-        printf("Проверка целостности архива\n");
+        check_integrity(argv, argc);
         
     else if (!strcmp(argv[1], "a"))
         add_files(argv, argc);
