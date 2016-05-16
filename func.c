@@ -48,26 +48,12 @@ int add_files(char **argv, int argc) {
     uint32_t crc;
     char *name_old_arc = NULL, *filename;
     long long fsize;
-
-    //FIXME добавить проверку для файлов, защищенных от записей
-    f_list = (FILE**)malloc((argc-3)*sizeof(FILE));
-    for (i = 0; i < argc-3; i++)
-        f_list[i] = NULL;
-    for (i = 3; i < argc; i++)
-    {
-        if (!(f = fopen(argv[i], "rb")))
-        {
-            printf("Файл с именем %s не найден!\n", argv[i]);
-            return ERR_NOFILE;
-        }
-        f_list[i-3] = f;
-    }
-    
-    if (!(f_stat = (struct stat*)malloc((argc-3)*sizeof(struct stat)))) //тут и далее argc-3 количество файлов
-        exit(ERR_OUTMEM);
     
     if (stat(argv[2], &arc_stat) != -1) //если архив с переданным именем уже существует
     {
+        if (check_read_protection(argv[2]))
+            exit(ERR_WRITE);
+    
         update = 1;
         name_old_arc = (char*)malloc((strlen(argv[2])+strlen(".old"))*sizeof(char));
         strcpy(name_old_arc, argv[2]);
@@ -77,14 +63,38 @@ int add_files(char **argv, int argc) {
             printf("Не удалось переименовать архив!\n");
             exit(ERR_WRITE);
         }
+        
+    }
+    
+    if (!(f_stat = (struct stat*)malloc((argc-3)*sizeof(struct stat)))) //тут и далее argc-3 количество файлов
+        exit(ERR_OUTMEM);
+    
+    f_list = (FILE**)malloc((argc-3)*sizeof(FILE));
+    for (i = 0; i < argc-3; i++)
+    {
+        f_list[i] = NULL;
+        if (stat(argv[i+3], &f_stat[i])) //получаем информацию о файле
+            exit(ERR_GETINFO);
+    }
+    for (i = 3; i < argc; i++)
+    {
+        if (check_read_protection(argv[i]))
+        {
+            if (update)
+                rename(name_old_arc, argv[2]);
+            exit(ERR_READ);
+        }
+        if (!(f = fopen(argv[i], "rb")))
+        {
+            printf("Файл с именем %s не найден!\n", argv[i]);
+            exit(ERR_NOFILE);
+        }
+        f_list[i-3] = f;
     }
     
     //Создаем архив из переданных файлов
     for (i = 0; i < argc-3; i++)
     {
-        if (stat(argv[i+3], &f_stat[i])) //получаем информацию о файле
-            exit(ERR_GETINFO);
-        
         if (!f_stat[i].st_size)
         {
             printf("Файл %s пустой и не будет добавлен в архив!\n", argv[i+3]);
@@ -235,6 +245,9 @@ int extract_files(char **argv, int argc)
     
     stat(argv[2], &arc_stat);
     
+    if (check_read_protection(argv[2]))
+        exit(ERR_READ);
+    
     if (!(archive = fopen(argv[2], "rb"))) //открываем архив на чтение
         exit(ERR_CREATEFILE);
     
@@ -330,6 +343,9 @@ int show_flist(char **argv, int argc) {
     
     if (argc != 3)
         exit(ERR_NOARG);
+    
+    if (check_read_protection(argv[2]))
+        exit(ERR_READ);
     arc = fopen(argv[2], "rb");
     
     while (ftell(arc) != arc_stat.st_size)
@@ -380,6 +396,9 @@ int delete_files(char **argv, int argc)
         printf("Не переданы аргументы!\n");
         exit(ERR_NOARG);
     }
+    
+    if (check_read_protection(argv[2]))
+        exit(ERR_READ);
     
     name_old_arc = (char*)malloc((strlen(argv[2])+strlen(".old"))*sizeof(char));
     strcpy(name_old_arc, argv[2]);
@@ -494,6 +513,9 @@ int check_integrity(char **argv, int argc)
     unsigned char *buf;
     int dmg = 0;
     
+    if (check_read_protection(argv[2]))
+        exit(ERR_READ);
+    
     stat(argv[2], &arc_stat);
     arc = fopen(argv[2], "rb");
     
@@ -510,7 +532,16 @@ int check_integrity(char **argv, int argc)
         fread(&crc, sizeof(uint32_t), 1, arc);
         //--------
         
-        filename_tmp = (char*)malloc(sizeof(filename) + strlen(".tmp")*sizeof(char));
+        printf("Start checking %s...\n", filename);
+        
+        if (!(filename_tmp = (char*)malloc(sizeof(filename) + strlen(".tmp")*sizeof(char))))
+        {
+            printf("Не удалось создать временный файл для проверки %s\n", filename);
+            
+            free(filename);
+            fclose(arc);
+        }
+        
         strcpy(filename_tmp, filename);
         strcat(filename_tmp, ".tmp");
         
@@ -521,7 +552,16 @@ int check_integrity(char **argv, int argc)
         fclose(temp);
         temp = fopen(filename_tmp, "rb");
         
-        buf = (unsigned char*)malloc(fsize*sizeof(unsigned char));
+        if (!(buf = (unsigned char*)malloc(fsize*sizeof(unsigned char))))
+        {
+            printf("Не удалось выделить память под данные файла %s.\n", filename);
+            free(filename_tmp);
+            free(filename);
+            fclose(temp);
+            fclose(arc);
+            
+            exit(ERR_OUTMEM);
+        }
         
         fread(buf, sizeof(unsigned char), fsize, temp); //считываем то, что декодировали
         
@@ -534,7 +574,7 @@ int check_integrity(char **argv, int argc)
         fclose(temp);
         remove(filename_tmp);
         free(filename_tmp);
-        free(filename);
+        filename = NULL;
         free(buf);
     }
     
@@ -546,6 +586,24 @@ int check_integrity(char **argv, int argc)
     return 0;
 }
 
+/* Проверка на защиту от чтения.
+   Принимает: имя файла для проверки.
+   Возвращает: 0 - если файл доступен для чтения.
+               1 - если защищен.
+ */
+int check_read_protection(char *filename) {
+    struct stat f_stat;
+    
+    stat(filename, &f_stat);
+    
+    if (!((f_stat.st_mode) & S_IREAD))
+    {
+        printf("Файл %s не удалось прочитать, т.к. он защищен от чтения!\n", filename);
+        return 1;
+    }
+    
+    return 0;
+}
 
 
 

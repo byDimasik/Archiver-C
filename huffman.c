@@ -5,8 +5,9 @@
 struct sym //символ в дереве Хаффмана
 {
     unsigned char ch;       //символ
+    int get;
     float freq;             //частота встречаемости
-    char code[255];         //код символа
+    char code[257];         //код символа
     struct sym *left;       //указатель на левый узел
     struct sym *right;      //указатель на правый узел
 }; typedef struct sym sym;
@@ -37,7 +38,6 @@ sym *makeTree(sym *psym[], int k)//рeкурсивная функция созд
     temp->left = psym[k-1];
     temp->right = psym[k-2];
 
-    
     if (k == 2)
         return temp;
     else //внесение в массив в нужное место элемента дерева Хаффмана
@@ -80,33 +80,41 @@ int code(FILE *fp, FILE *fp3)
     int kk = 0;                       //счётчик всех знаков в файле
     int fsize2 = 0;                   //счётчик символов из 0 и 1 в промежуточном файле teemp
     int ts;                           //размер хвоста файла (то, что не кратно 8 в промежуточном файле)
-    int kolvo[256] = {0};             //инициализируем массив количества уникальных символов
-    sym simbols[256] = {0};           //инициализируем массив записей
-    sym *psym[256];                   //инициализируем массив указателей на записи
+    int kolvo[257] = {0};             //инициализируем массив количества уникальных символов
+    sym simbols[257] = {0};           //инициализируем массив записей
+    sym *psym[257];                   //инициализируем массив указателей на записи
     int mes[8];                       //массив 0 и 1
     int i, j = 0;                     //вспомогательные переменные
     int count = 0;
     unsigned char *buf_end = NULL;
+    sym *root;
     
-    for (i = 0; i < 256; i++)
+    for (i = 0; i < 257; i++)
+    {
         simbols[i].ch = 0;
+        simbols[i].get = 0;
+    }
     
     //Начинаем побайтно читать файл и составлять таблицу встречаемости
     while ((chh = fgetc(fp)) != EOF)
     {
-        for (i = 0; i < 256; i++)
+        for (i = 0; i < 257; i++)
         {
             if ((unsigned char)chh == simbols[i].ch)
             {
                 if (((unsigned char)chh == 0) && (k == 0))
+                {
+                    simbols[i].get = 1;
                     k++;
+                }
                 kolvo[i]++;
                 kk++;
                 break;
             }
-            if (simbols[i].ch == 0)
+            if (simbols[i].get == 0)
             {
                 simbols[i].ch = (unsigned char)chh;
+                simbols[i].get = 1;
                 kolvo[i] = 1;
                 k++;
                 kk++;
@@ -118,13 +126,13 @@ int code(FILE *fp, FILE *fp3)
     // Рассчёт частоты встречаемости
     for (i = 0; i <= k; i++)
         simbols[i].freq = (float)kolvo[i]/kk;
-    
+
     for (i = 0; i <= k; i++) //в массив указателей заносим адреса записей
         psym[i] = &simbols[i];
     
     //Сортировка по убыванию
     sym tempp;
-    for (i = 0; i < k; i++)
+    for (i = 0; i <= k; i++)
         for (j = 0; j < k-1; j++)
             if (simbols[j].freq < simbols[j+1].freq)
             {
@@ -132,8 +140,8 @@ int code(FILE *fp, FILE *fp3)
                 simbols[j] = simbols[j+1];
                 simbols[j+1] = tempp;
             }
- 
-    sym *root = makeTree(psym, k+1); //создание дерева Хаффмана
+    
+    root = makeTree(psym, k+1); //создание дерева Хаффмана
     
     makeCodes(root); //вызов функции получения кода
     
@@ -238,14 +246,15 @@ int code(FILE *fp, FILE *fp3)
 
 int decode(FILE *f, FILE *f_end, long long fsize) {
     FILE *f_temp;                     //временный файл
-    char buf_code[256], chh, end, mes[8];
+    char buf_code[257], chh, mes[8];
     int i, j, ch, ts, k, count = 0;
-    unsigned char c;
-    sym simbols[256] = {0};           //массив структур символов
-    sym *psym[256];                   //массив указателей на структуры символов
+    unsigned char c, end;
+    sym simbols[257] = {0};           //массив структур символов
+    sym *psym[257];                   //массив указателей на структуры символов
     union code code1;                 //объединение для побитовой записи символов
+    sym *root;
     
-    for (i = 0; i < 256; i++) //зануляем символы и частоту встречаемости
+    for (i = 0; i < 257; i++) //зануляем символы и частоту встречаемости
     {
         simbols[i].ch = 0;
         simbols[i].freq = 0;
@@ -253,7 +262,7 @@ int decode(FILE *f, FILE *f_end, long long fsize) {
     
     fread(&k, sizeof(int), 1, f);                 //количество уникальных символов
     fread(&ts, sizeof(int), 1, f);                //величина хвоста
-    
+
     for (i = 0; i <= k; i++) //считываем таблицу встречаемости
     {
         fread(&simbols[i].ch, sizeof(unsigned char), 1, f);
@@ -264,7 +273,7 @@ int decode(FILE *f, FILE *f_end, long long fsize) {
     for (i = 0; i <= k; i++) //в массив указателей заносим адреса записей
         psym[i] = &simbols[i];
     
-    sym *root = makeTree(psym, k+1); //создание дерева Хаффмана
+    root = makeTree(psym, k+1); //создание дерева Хаффмана
     
     makeCodes(root);   //получение кодов для символов
     
@@ -288,24 +297,16 @@ int decode(FILE *f, FILE *f_end, long long fsize) {
         mes[6] = code1.byte.b7 + '0';
         mes[7] = code1.byte.b8 + '0';
         
-        fwrite(mes, sizeof(char), 8, f_temp);
+        fwrite(mes, sizeof(unsigned char), 8, f_temp);
         for (i = 0; i < 8; i++)
             mes[i] = 0;
         j++;
     }
     //----
     
-    //---- обрезаем остаток
-    if ((ts % 2) || (ts == 0))
-        fseek(f_temp, -ts-1, SEEK_CUR);
-    else
-        fseek(f_temp, -ts, SEEK_CUR);
-    int a = -1;
-    fwrite(&a, sizeof(EOF), 1, f_temp);
-    //----
     fclose(f_temp);
     
-    for (i = 0; i < 256; i++)
+    for (i = 0; i < 257; i++)
         buf_code[i] = 0;
     
     count = 0;
@@ -320,8 +321,8 @@ int decode(FILE *f, FILE *f_end, long long fsize) {
         for (i = 0; i <= k; i++)
             if (!strcmp(buf_code, simbols[i].code))
             {
-                end = (char)simbols[i].ch;
-                fwrite(&end, sizeof(char), 1, f_end);
+                end = (unsigned char)simbols[i].ch;
+                fwrite(&end, sizeof(unsigned char), 1, f_end);
                 count++;
                 memset(buf_code, 0, strlen(buf_code));
                 break;

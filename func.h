@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <math.h>
 
 #define ERR_UNKNOWN_OPT 222 //неизвестный режим работы
 #define ERR_NOFILE 333      //не найден файл для чтения
@@ -25,6 +26,7 @@ int extract_files(char **argv, int argc);
 int show_flist(char **argv, int argc);
 int delete_files(char **argv, int argc);
 int check_integrity(char **argv, int argc);
+int check_read_protection(char *filename);
 uint32_t Crc32(unsigned char *buf, size_t len);
 
 
