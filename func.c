@@ -49,6 +49,17 @@ int add_files(char **argv, int argc) {
     char *name_old_arc = NULL, *filename;
     long long fsize;
     
+    if (argc < 3)
+    {
+        if (argc < 4)
+        {
+            printf("Не переданы файлы для архивации!\n");
+            exit(ERR_NOARG);
+        }
+        printf("Не переданы аргументы!\n");
+        exit(ERR_NOARG);
+    }
+    
     if (stat(argv[2], &arc_stat) != -1) //если архив с переданным именем уже существует
     {
         if (check_read_protection(argv[2]))
@@ -243,6 +254,12 @@ int extract_files(char **argv, int argc)
     FILE *f = NULL;         //обрабатываемый файл
     struct stat arc_stat;   //структура с информацией об архиве
     
+    if (argc < 3)
+    {
+        printf("Не переданы аргументы!\n");
+        exit(ERR_NOARG);
+    }
+    
     stat(argv[2], &arc_stat);
     
     if (check_read_protection(argv[2]))
@@ -338,6 +355,12 @@ int show_flist(char **argv, int argc) {
     char *filename;         //имя файла
     
     struct stat arc_stat;   //структура с информацией об архиве
+    
+    if (argc < 3)
+    {
+        printf("Не переданы аргументы!\n");
+        exit(ERR_NOARG);
+    }
     
     stat(argv[2], &arc_stat);
     
@@ -512,6 +535,12 @@ int check_integrity(char **argv, int argc)
     uint32_t crc;
     unsigned char *buf;
     int dmg = 0;
+    
+    if (argc < 3)
+    {
+        printf("Не переданы аргументы!\n");
+        exit(ERR_NOARG);
+    }
     
     if (check_read_protection(argv[2]))
         exit(ERR_READ);
